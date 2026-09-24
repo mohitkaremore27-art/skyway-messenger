@@ -107,7 +107,10 @@ io.on('connection', (socket) => {
         const newMessage = new Message({ sender, receiver, text });
         await newMessage.save();
 
+        // Message receiver ko bhejein
         io.to(receiver).emit('receivePrivateMessage', { sender, receiver, text, timestamp: new Date() });
+        
+        // Sender ko bhi confirm karne ke liye bhejein (taaki UI update ho)
         io.to(sender).emit('receivePrivateMessage', { sender, receiver, text, timestamp: new Date() });
     });
 
