@@ -1,5 +1,4 @@
-// 🔴 DHYAAN DEIN: Port 3001 kar diya gaya hai (Server 3001 par chal raha hai)
-const API_URL = 'http://localhost:3001'; 
+const API_URL = 'https://skyway-messenger.onrender.com';
 
 const socket = io(API_URL);
 let currentUser = '';
@@ -136,7 +135,6 @@ function sendMessage() {
 
 // Naya message receive karna
 socket.on('receivePrivateMessage', (data) => {
-    // Check karein ki message current chat window se related hai ya nahi
     if ((data.sender === currentUser && data.receiver === chatWithUser) || 
         (data.sender === chatWithUser && data.receiver === currentUser)) {
         
