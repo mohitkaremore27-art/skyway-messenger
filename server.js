@@ -8,13 +8,20 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+
+// 🔴 UPDATED CORS SETTING (Live message ke liye zaroori)
+const io = new Server(server, { 
+    cors: { 
+        origin: "*", 
+        methods: ["GET", "POST"] 
+    },
+    transports: ['websocket', 'polling']
+});
 
 app.use(cors());
 app.use(express.json());
 
-// 🔴 AAPKA ASLI MONGODB LINK YAHAN HAI 🔴
-// Maine isme aapka username aur password daal diya hai.
+// 🔴 AAPKA ASLI MONGODB LINK YAHAN HAI
 const MONGO_URI = 'mongodb+srv://mohitkaremore87_db_user:9dpflcReXLn5jkjn@chatapp.xirfhto.mongodb.net/skyway?retryWrites=true&w=majority';
 const JWT_SECRET = 'skyway_secret_key_123'; 
 
@@ -23,9 +30,9 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected Successfully!'))
   .catch(err => console.log('❌ DB Error:', err.message));
 
-// --- DATABASE MODELS (Users aur Messages) ---
+// --- DATABASE MODELS ---
 const UserSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: true }, // Unique ID
+    username: { type: String, required: true, unique: true },
     password: { type: String, required: true }
 });
 const User = mongoose.model('User', UserSchema);
@@ -40,28 +47,22 @@ const Message = mongoose.model('Message', MessageSchema);
 
 // --- AUTHENTICATION APIs ---
 
-// 1. Signup (Naya User Banana)
 app.post('/api/signup', async (req, res) => {
     try {
         const { username, password } = req.body;
-        
-        // Check karein ki username pehle se exist karta hai ya nahi
         const existingUser = await User.findOne({ username });
         if (existingUser) {
-            return res.status(400).json({ error: 'Yeh User ID pehle se liya gaya hai! Dusra try karein.' });
+            return res.status(400).json({ error: 'Yeh User ID pehle se liya gaya hai!' });
         }
-
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = new User({ username, password: hashedPassword });
         await newUser.save();
-        
         res.json({ message: 'Account ban gaya! Ab login karein.' });
     } catch (err) {
         res.status(500).json({ error: 'Server error' });
     }
 });
 
-// 2. Login (Account mein aana)
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -78,7 +79,6 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// 3. Purane Messages Lana (History)
 app.get('/api/messages/:user1/:user2', async (req, res) => {
     try {
         const { user1, user2 } = req.params;
@@ -96,25 +96,18 @@ app.get('/api/messages/:user1/:user2', async (req, res) => {
 
 // --- SOCKET.IO REAL-TIME CHAT ---
 io.on('connection', (socket) => {
-    
-    // Jab user login kare, toh usse apne username wale room mein daal do
     socket.on('join', (username) => {
         socket.username = username;
         socket.join(username); 
         console.log(`🔵 ${username} is online`);
     });
 
-    // Private Message Bhejna
     socket.on('sendPrivateMessage', async (data) => {
         const { sender, receiver, text } = data;
-
-        // Database mein save karein
         const newMessage = new Message({ sender, receiver, text });
         await newMessage.save();
 
-        // Message sirf receiver ke room mein bhejein
         io.to(receiver).emit('receivePrivateMessage', { sender, receiver, text, timestamp: new Date() });
-        // Sender ko bhi confirm karne ke liye bhejein (UI update ke liye)
         io.to(sender).emit('receivePrivateMessage', { sender, receiver, text, timestamp: new Date() });
     });
 
@@ -123,6 +116,5 @@ io.on('connection', (socket) => {
     });
 });
 
-// 🟢 PORT 3001
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

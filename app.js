@@ -1,6 +1,12 @@
+// 🟢 AAPKA RENDER WALA LIVE SERVER LINK YAHAN HAI
 const API_URL = 'https://skyway-messenger.onrender.com';
 
-const socket = io(API_URL);
+// Updated Socket Connection (Live message ke liye zaroori)
+const socket = io(API_URL, {
+    transports: ['websocket', 'polling'],
+    withCredentials: false
+});
+
 let currentUser = '';
 let chatWithUser = '';
 
