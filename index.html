@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skyway Messenger</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+
+    <!-- LOGIN / SIGNUP SCREEN -->
+    <div id="auth-screen">
+        <h2>Skyway Messenger</h2>
+        <input type="text" id="username" placeholder="Unique Username (e.g. mohit_123)">
+        <input type="password" id="password" placeholder="Password">
+        <div class="btn-group">
+            <button id="signup-btn">Sign Up</button>
+            <button id="login-btn">Login</button>
+        </div>
+        <p id="auth-message"></p>
+    </div>
+
+    <!-- CHAT SCREEN -->
+    <div id="chat-screen" style="display: none;">
+        
+        <!-- Sidebar (User Search) -->
+        <div class="sidebar">
+            <h3 id="my-username"></h3>
+            <hr>
+            <p>Start a Chat:</p>
+            <input type="text" id="search-user" placeholder="Enter Username...">
+            <button id="chat-btn">Chat</button>
+            <br><br>
+            <button id="logout-btn" style="background: #d9534f;">Logout</button>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="chat-area">
+            <div class="header">
+                <h3 id="chat-with">Select a user to start chatting</h3>
+            </div>
+            <div id="messages"></div>
+            <div class="input-area">
+                <input type="text" id="message-input" placeholder="Type a message..." disabled>
+                <button id="send-btn" disabled>Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link JS File -->
+    <script src="app.js"></script>
+</body>
+</html>
