@@ -5,50 +5,60 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Skyway Messenger</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Socket.io Client Library -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
-
-    <!-- LOGIN / SIGNUP SCREEN -->
-    <div id="auth-screen">
+    <!-- Auth Container (Login / Signup) -->
+    <div id="auth-container" class="auth-box">
         <h2>Skyway Messenger</h2>
-        <input type="text" id="username" placeholder="Unique Username (e.g. mohit_123)">
-        <input type="password" id="password" placeholder="Password">
-        <div class="btn-group">
-            <button id="signup-btn">Sign Up</button>
-            <button id="login-btn">Login</button>
+        <div class="tabs">
+            <button id="tab-login" class="active" onclick="switchTab('login')">Login</button>
+            <button id="tab-signup" onclick="switchTab('signup')">Signup</button>
         </div>
-        <p id="auth-message"></p>
+        <div class="form-group">
+            <input type="text" id="auth-username" placeholder="Enter Unique ID (Username)">
+            <input type="password" id="auth-password" placeholder="Enter Password">
+            <button id="auth-btn" onclick="handleAuth()">Login</button>
+            <p id="auth-error" class="error-msg"></p>
+        </div>
     </div>
 
-    <!-- CHAT SCREEN -->
-    <div id="chat-screen" style="display: none;">
-        
-        <!-- Sidebar (User Search) -->
+    <!-- Main Chat App Container -->
+    <div id="chat-container" class="chat-app" style="display: none;">
+        <!-- Sidebar -->
         <div class="sidebar">
-            <h3 id="my-username"></h3>
-            <hr>
-            <p>Start a Chat:</p>
-            <input type="text" id="search-user" placeholder="Enter Username...">
-            <button id="chat-btn">Chat</button>
-            <br><br>
-            <button id="logout-btn" style="background: #d9534f;">Logout</button>
+            <div class="user-profile">
+                <span id="my-username">User</span>
+                <span id="my-status" class="status-dot online">Online</span>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </div>
+            <div class="add-contact">
+                <p>Add / Open Contact:</p>
+                <input type="text" id="target-username" placeholder="Enter Unique ID...">
+                <button onclick="openChat()">Open</button>
+            </div>
+            <div class="contacts-list">
+                <p>Saved Contacts:</p>
+                <div id="contacts"></div>
+            </div>
         </div>
 
-        <!-- Main Chat Area -->
-        <div class="chat-area">
-            <div class="header">
-                <h3 id="chat-with">Select a user to start chatting</h3>
+        <!-- Chat Window -->
+        <div class="chat-window">
+            <div class="chat-header">
+                <span id="chat-with-title">Select a contact to start chatting</span>
+                <span id="chat-target-status" class="status-dot"></span>
             </div>
-            <div id="messages"></div>
-            <div class="input-area">
-                <input type="text" id="message-input" placeholder="Type a message..." disabled>
-                <button id="send-btn" disabled>Send</button>
+            <div id="typing-indicator" class="typing-indicator" style="display: none;">Typing...</div>
+            <div id="messages-list" class="messages-container"></div>
+            <div class="chat-input-area">
+                <input type="text" id="message-input" placeholder="Type a message..." oninput="emitTyping()" onkeypress="checkEnter(event)">
+                <button onclick="sendMessage()" id="send-btn">Send</button>
             </div>
         </div>
     </div>
 
-    <!-- Link JS File -->
     <script src="app.js"></script>
 </body>
 </html>
