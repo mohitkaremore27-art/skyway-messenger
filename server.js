@@ -19,7 +19,7 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB Connection
-const MONGO_URI = "mongodb+srv://mohitkaremore27_db_user:Mohit123456@cluster0.oisxee7.mongodb.net/?appName=Cluster0";
+const MONGO_URI = "mongodb+srv://mohitkaremore27_db_user:Mohit321@cluster0.oisxee7.mongodb.net/?appName=Cluster0";
 
 mongoose.connect(MONGO_URI)
 .then(() => {
