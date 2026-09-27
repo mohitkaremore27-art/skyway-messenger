@@ -18,13 +18,11 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// MongoDB Connection (Aapka password yahan set kar diya gaya hai)
+// MongoDB Connection
 const MONGO_URI = "mongodb+srv://mohitkaremore27_db_user:Mohit2937@cluster0.oisxee7.mongodb.net/?appName=Cluster0";
 
-mongoose.connect(MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => {
+mongoose.connect(MONGO_URI)
+.then(() => {
     console.log("MongoDB Connected Successfully!");
 }).catch(err => {
     console.error("DB Connection Error:", err);
