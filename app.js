@@ -1,169 +1,209 @@
-// 🟢 AAPKA RENDER WALA LIVE SERVER LINK YAHAN HAI
-const API_URL = 'https://skyway-messenger.onrender.com';
+// Render Backend Live URL Connected
+const SOCKET_URL = 'https://skyway-messenger.onrender.com';
+const socket = io(SOCKET_URL);
 
-// Updated Socket Connection (Live message ke liye zaroori)
-const socket = io(API_URL, {
-    transports: ['websocket', 'polling'],
-    withCredentials: false
-});
+let currentUser = localStorage.getItem('skyway_user') || null;
+let currentChatUser = null;
+let activeUsersList = [];
 
-let currentUser = '';
-let chatWithUser = '';
-
-// --- BUTTONS KO CONNECT KARNA ---
-document.getElementById('signup-btn').addEventListener('click', signup);
-document.getElementById('login-btn').addEventListener('click', login);
-document.getElementById('chat-btn').addEventListener('click', startChat);
-document.getElementById('send-btn').addEventListener('click', sendMessage);
-document.getElementById('logout-btn').addEventListener('click', logout);
-
-// Enter key dabane par message bhejna
-document.getElementById('message-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendMessage();
-});
-
-
-// --- AUTHENTICATION FUNCTIONS ---
-
-async function signup() {
-    const username = document.getElementById('username').value.trim();
-    const password = document.getElementById('password').value;
-
-    if (!username || !password) {
-        alert('Username aur Password dono daalein!');
-        return;
+window.onload = () => {
+    if (currentUser) {
+        showChatApp();
     }
+};
 
-    try {
-        const res = await fetch(`${API_URL}/api/signup`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-        const data = await res.json();
-        document.getElementById('auth-message').innerText = data.message || data.error;
-    } catch (error) {
-        document.getElementById('auth-message').innerText = "Server se connect nahi ho pa raha!";
+function switchTab(tab) {
+    const loginTab = document.getElementById('tab-login');
+    const signupTab = document.getElementById('tab-signup');
+    const authBtn = document.getElementById('auth-btn');
+    const errorMsg = document.getElementById('auth-error');
+    errorMsg.innerText = '';
+
+    if (tab === 'login') {
+        loginTab.classList.add('active');
+        signupTab.classList.remove('active');
+        authBtn.innerText = 'Login';
+    } else {
+        signupTab.classList.add('active');
+        loginTab.classList.remove('active');
+        authBtn.innerText = 'Signup';
     }
 }
 
-async function login() {
-    const username = document.getElementById('username').value.trim();
-    const password = document.getElementById('password').value;
+async function handleAuth() {
+    const username = document.getElementById('auth-username').value.trim().toLowerCase();
+    const password = document.getElementById('auth-password').value;
+    const errorMsg = document.getElementById('auth-error');
+    const isLogin = document.getElementById('tab-login').classList.contains('active');
 
     if (!username || !password) {
-        alert('Username aur Password dono daalein!');
+        errorMsg.innerText = 'Sabhi fields bharna zaroori hai!';
         return;
     }
 
+    const endpoint = isLogin ? '/api/login' : '/api/signup';
+
     try {
-        const res = await fetch(`${API_URL}/api/login`, {
+        const response = await fetch(`${SOCKET_URL}${endpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
-        const data = await res.json();
+        const data = await response.json();
 
-        if (data.token) {
-            currentUser = data.username;
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('username', currentUser);
-            showChatScreen();
-        } else {
-            document.getElementById('auth-message').innerText = data.error;
+        if (!response.ok) {
+            errorMsg.innerText = data.error || 'Kuch gadbad ho gayi!';
+            return;
         }
-    } catch (error) {
-        document.getElementById('auth-message').innerText = "Server se connect nahi ho pa raha!";
+
+        if (isLogin) {
+            currentUser = data.username;
+            localStorage.setItem('skyway_user', currentUser);
+            showChatApp();
+        } else {
+            alert('Signup successful! Ab aap login kar sakte hain.');
+            switchTab('login');
+        }
+    } catch (err) {
+        errorMsg.innerText = 'Server se connect nahi ho paya!';
     }
+}
+
+function showChatApp() {
+    document.getElementById('auth-container').style.display = 'none';
+    document.getElementById('chat-container').style.display = 'flex';
+    document.getElementById('my-username').innerText = currentUser;
+
+    socket.emit('join', currentUser);
+    loadSavedContacts();
 }
 
 function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
-    window.location.reload();
+    localStorage.removeItem('skyway_user');
+    location.reload();
 }
 
-function showChatScreen() {
-    document.getElementById('auth-screen').style.display = 'none';
-    document.getElementById('chat-screen').style.display = 'flex';
-    document.getElementById('my-username').innerText = `Logged in as: ${currentUser}`;
-    socket.emit('join', currentUser);
+function openChat() {
+    const target = document.getElementById('target-username').value.trim().toLowerCase();
+    if (!target || target === currentUser) {
+        alert('Kripya valid Unique ID daalein.');
+        return;
+    }
+    currentChatUser = target;
+    document.getElementById('chat-with-title').innerText = `Chatting with: ${target}`;
+    
+    saveContactToLocal(target);
+    updateContactUI();
+    fetchMessages();
 }
 
-
-// --- CHAT FUNCTIONS ---
-
-async function startChat() {
-    const user = document.getElementById('search-user').value.trim();
-    if (user === currentUser) {
-        alert('Aap khud se chat nahi kar sakte!');
-        return;
+function saveContactToLocal(username) {
+    let contacts = JSON.parse(localStorage.getItem(`contacts_${currentUser}`)) || [];
+    if (!contacts.includes(username)) {
+        contacts.push(username);
+        localStorage.setItem(`contacts_${currentUser}`, JSON.stringify(contacts));
     }
-    if (!user) {
-        alert('Username daalein!');
-        return;
-    }
+}
 
-    chatWithUser = user;
-    document.getElementById('chat-with').innerText = `Chatting with: ${chatWithUser}`;
-    document.getElementById('message-input').disabled = false;
-    document.getElementById('send-btn').disabled = false;
+function loadSavedContacts() {
+    updateContactUI();
+}
 
-    // Purane messages load karein
+function updateContactUI() {
+    const contactsDiv = document.getElementById('contacts');
+    contactsDiv.innerHTML = '';
+    let contacts = JSON.parse(localStorage.getItem(`contacts_${currentUser}`)) || [];
+
+    contacts.forEach(contact => {
+        const btn = document.createElement('div');
+        btn.className = `contact-item ${currentChatUser === contact ? 'active' : ''}`;
+        
+        const isOnline = activeUsersList.includes(contact);
+        btn.innerHTML = `<span>${contact}</span> <span class="dot ${isOnline ? 'online' : 'offline'}"></span>`;
+        
+        btn.onclick = () => {
+            currentChatUser = contact;
+            document.getElementById('chat-with-title').innerText = `Chatting with: ${contact}`;
+            updateContactUI();
+            fetchMessages();
+        };
+        contactsDiv.appendChild(btn);
+    });
+}
+
+async function fetchMessages() {
+    if (!currentChatUser) return;
     try {
-        const res = await fetch(`${API_URL}/api/messages/${currentUser}/${chatWithUser}`);
+        const res = await fetch(`${SOCKET_URL}/api/messages/${currentUser}/${currentChatUser}`);
         const messages = await res.json();
         
-        const messagesDiv = document.getElementById('messages');
-        messagesDiv.innerHTML = ''; // Clear previous chat
-        
+        const list = document.getElementById('messages-list');
+        list.innerHTML = '';
         messages.forEach(msg => {
-            const type = msg.sender === currentUser ? 'sent' : 'received';
-            appendMessage(msg.sender, msg.text, type);
+            appendMessageUI(msg.sender === currentUser ? 'You' : msg.sender, msg.text);
         });
-    } catch (error) {
-        console.log("Messages load nahi ho paye.");
+    } catch (err) {
+        console.log("Error fetching messages:", err);
     }
 }
 
 function sendMessage() {
     const input = document.getElementById('message-input');
     const text = input.value.trim();
-    if (!text || !chatWithUser) return;
+    if (!text || !currentChatUser) return;
 
-    socket.emit('sendPrivateMessage', {
-        sender: currentUser,
-        receiver: chatWithUser,
-        text: text
-    });
+    const messageData = { sender: currentUser, receiver: currentChatUser, text };
+    socket.emit('sendPrivateMessage', messageData);
+    
+    appendMessageUI('You', text);
     input.value = '';
 }
 
-// Naya message receive karna
-socket.on('receivePrivateMessage', (data) => {
-    if ((data.sender === currentUser && data.receiver === chatWithUser) || 
-        (data.sender === chatWithUser && data.receiver === currentUser)) {
-        
-        const type = data.sender === currentUser ? 'sent' : 'received';
-        appendMessage(data.sender, data.text, type);
-    } 
-});
-
-// Message ko screen par dikhana
-function appendMessage(sender, text, type) {
-    const messagesDiv = document.getElementById('messages');
-    const msgDiv = document.createElement('div');
-    msgDiv.className = `message ${type}`;
-    msgDiv.innerHTML = `<b>${sender}:</b> ${text}`;
-    messagesDiv.appendChild(msgDiv);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto scroll to bottom
+function checkEnter(e) {
+    if (e.key === 'Enter') sendMessage();
 }
 
-// --- AUTO LOGIN (Agar pehle se login hai) ---
-window.onload = () => {
-    const savedUser = localStorage.getItem('username');
-    if (savedUser) {
-        currentUser = savedUser;
-        showChatScreen();
+function appendMessageUI(sender, text) {
+    const list = document.getElementById('messages-list');
+    const div = document.createElement('div');
+    div.className = `message ${sender === 'You' ? 'sent' : 'received'}`;
+    div.innerText = `${sender}: ${text}`;
+    list.appendChild(div);
+    list.scrollTop = list.scrollHeight;
+}
+
+let typingTimeout;
+function emitTyping() {
+    if (!currentChatUser) return;
+    socket.emit('typing', { sender: currentUser, receiver: currentChatUser });
+}
+
+socket.on('displayTyping', (data) => {
+    if (data.sender === currentChatUser) {
+        const indicator = document.getElementById('typing-indicator');
+        indicator.style.display = 'block';
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            indicator.style.display = 'none';
+        }, 1500);
     }
-};
+});
+
+socket.on('receivePrivateMessage', (data) => {
+    if (data.sender === currentChatUser || data.receiver === currentChatUser) {
+        if (data.sender !== currentUser) {
+            appendMessageUI(data.sender, data.text);
+        }
+    }
+});
+
+socket.on('updateUserStatus', (users) => {
+    activeUsersList = users;
+    if (currentChatUser) {
+        const isOnline = activeUsersList.includes(currentChatUser);
+        const statusSpan = document.getElementById('chat-target-status');
+        statusSpan.innerText = isOnline ? 'Online' : 'Offline';
+        statusSpan.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
+    }
+    updateContactUI();
+});
