@@ -18,133 +18,141 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// MongoDB Connection (Apna MongoDB URI yahan daalein ya environment variable use karein)
-const MONGO_URI = process.env.MONGO_URI || "YAHAN_APNA_MONGODB_URI_DAALEIN"; 
+// MongoDB Connection (Aapka password yahan set kar diya gaya hai)
+const MONGO_URI = "mongodb+srv://mohitkaremore27_db_user:Mohit2937@cluster0.oisxee7.mongodb.net/?appName=Cluster0";
 
 mongoose.connect(MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true
-}).then(() => console.log("MongoDB Connected Successfully")).catch(err => console.log("DB Connection Error:", err));
+}).then(() => {
+    console.log("MongoDB Connected Successfully!");
+}).catch(err => {
+    console.error("DB Connection Error:", err);
+});
 
-// User Schema
-const UserSchema = new mongoose.Schema({
-    username: { type: String, unique: true, required: true },
+// User Schema & Model
+const userSchema = new mongoose.Schema({
+    username: { type: String, unique: true, required: true, lowercase: true, trim: true },
     password: { type: String, required: true }
 });
-const User = mongoose.model('User', UserSchema);
+const User = mongoose.model('User', userSchema);
 
-// Message Schema
-const MessageSchema = new mongoose.Schema({
-    sender: String,
-    receiver: String,
-    text: String,
+// Message Schema & Model
+const messageSchema = new mongoose.Schema({
+    sender: { type: String, required: true, lowercase: true, trim: true },
+    receiver: { type: String, required: true, lowercase: true, trim: true },
+    text: { type: String, required: true },
     timestamp: { type: Date, default: Date.now }
 });
-const Message = mongoose.model('Message', MessageSchema);
+const Message = mongoose.model('Message', messageSchema);
 
-// Signup Route
+const JWT_SECRET = "skyway_secret_key_999";
+
+// Signup API
 app.post('/api/signup', async (req, res) => {
     try {
-        const { username, password } = req.body;
-        const cleanUser = username.trim().toLowerCase();
-        const existing = await User.findOne({ username: cleanUser });
-        if (existing) return res.status(400).json({ error: 'Username pehle se maujood hai!' });
+        let { username, password } = req.body;
+        username = username.trim().toLowerCase();
         
+        const existingUser = await User.findOne({ username });
+        if (existingUser) {
+            return res.status(400).json({ error: 'Yeh Unique ID pehle se li ja chuki hai!' });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({ username: cleanUser, password: hashedPassword });
+        const newUser = new User({ username, password: hashedPassword });
         await newUser.save();
-        res.json({ message: 'Signup safal raha! Ab login karein.' });
+        
+        res.status(201).json({ message: 'Signup safal ho gaya! Ab aap login karein.' });
     } catch (err) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Server error aa gaya!' });
     }
 });
 
-// Login Route
+// Login API
 app.post('/api/login', async (req, res) => {
     try {
-        const { username, password } = req.body;
-        const cleanUser = username.trim().toLowerCase();
-        const user = await User.findOne({ username: cleanUser });
-        if (!user) return res.status(400).json({ error: 'Galat username ya password!' });
+        let { username, password } = req.body;
+        username = username.trim().toLowerCase();
+
+        const user = await User.findOne({ username });
+        if (!user) {
+            return res.status(400).json({ error: 'User nahi mila! Pehle Signup karein.' });
+        }
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ error: 'Galat username ya password!' });
+        if (!isMatch) {
+            return res.status(400).json({ error: 'Password galat hai!' });
+        }
 
-        const token = jwt.sign({ username: cleanUser }, 'secret_key', { expiresIn: '1h' });
-        res.json({ token, username: cleanUser });
+        const token = jwt.sign({ userId: user._id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({ token, username: user.username });
     } catch (err) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Login karte samay error aaya!' });
     }
 });
 
-// Get Messages History Route
+// Get Messages API
 app.get('/api/messages/:user1/:user2', async (req, res) => {
     try {
-        const { user1, user2 } = req.params;
+        let u1 = req.params.user1.trim().toLowerCase();
+        let u2 = req.params.user2.trim().toLowerCase();
+
         const messages = await Message.find({
             $or: [
-                { sender: user1, receiver: user2 },
-                { sender: user2, receiver: user1 }
+                { sender: u1, receiver: u2 },
+                { sender: u2, receiver: u1 }
             ]
         }).sort({ timestamp: 1 });
+
         res.json(messages);
     } catch (err) {
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Messages load nahi ho paye.' });
     }
 });
 
-// Socket.io Logic for Online Status, Typing, & Real-Time Messages
-let onlineUsers = {};
+// Socket.io Logic for Online/Offline, Typing & Messaging
+let activeUsers = {};
 
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
-    // Jab user login karke join ho
     socket.on('join', (username) => {
-        if (username) {
-            socket.username = username.trim().toLowerCase();
-            onlineUsers[socket.username] = socket.id;
-            io.emit('updateUserStatus', Object.keys(onlineUsers));
-        }
+        if (!username) return;
+        const cleanUser = username.trim().toLowerCase();
+        activeUsers[socket.id] = cleanUser;
+        io.emit('updateUserStatus', Object.values(activeUsers));
     });
 
-    // Jab koi user message type kare
-    socket.on('typing', (data) => {
-        const receiverSocketId = onlineUsers[data.receiver.trim().toLowerCase()];
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit('displayTyping', { sender: data.sender });
-        }
-    });
-
-    // Private Message logic & Database Save
     socket.on('sendPrivateMessage', async (data) => {
         try {
-            const newMessage = new Message({
-                sender: data.sender.trim().toLowerCase(),
-                receiver: data.receiver.trim().toLowerCase(),
-                text: data.text
-            });
+            const sender = data.sender.trim().toLowerCase();
+            const receiver = data.receiver.trim().toLowerCase();
+            const text = data.text;
+
+            const newMessage = new Message({ sender, receiver, text });
             await newMessage.save();
 
-            const receiverSocketId = onlineUsers[data.receiver.trim().toLowerCase()];
-            if (receiverSocketId) {
-                io.to(receiverSocketId).emit('receivePrivateMessage', data);
-            }
-            socket.emit('receivePrivateMessage', data);
+            io.emit('receivePrivateMessage', { sender, receiver, text });
         } catch (err) {
-            console.log('Message save error:', err);
+            console.log("Message save error:", err);
         }
     });
 
-    // Jab user disconnect ho jaye (app band kare ya logout kare)
-    socket.on('disconnect', () => {
-        if (socket.username) {
-            delete onlineUsers[socket.username];
-            io.emit('updateUserStatus', Object.keys(onlineUsers));
+    socket.on('typing', (data) => {
+        if (data && data.receiver) {
+            io.emit('displayTyping', { sender: data.sender, receiver: data.receiver });
         }
+    });
+
+    socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
+        delete activeUsers[socket.id];
+        io.emit('updateUserStatus', Object.values(activeUsers));
     });
 });
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
