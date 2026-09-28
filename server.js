@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -39,7 +38,7 @@ app.post('/api/signup', async (req, res) => {
     const { username, password } = req.body;
     const existingUser = await User.findOne({ username });
     if (existingUser) {
-      return res.status(400).json({ error: 'Username already exists' });
+      return res.status(400).json({ error: 'User already exists' });
     }
     const newUser = new User({ username, password });
     await newUser.save();
@@ -55,7 +54,7 @@ app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     const user = await User.findOne({ username, password });
     if (!user) {
-      return res.status(400).json({ error: 'Invalid username or password' });
+      return res.status(400).json({ error: 'Invalid ID or password' });
     }
     res.status(200).json({ message: 'Login successful', username: user.username });
   } catch (err) {
@@ -63,15 +62,39 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Socket.io Connection for Real-time Messaging
+// Track online users for 1-on-1 private chat: { username: socket.id }
+const onlineUsers = {};
+
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
+  // Register user socket mapping
+  socket.on('register_user', (username) => {
+    onlineUsers[username] = socket.id;
+    console.log(`User registered: ${username} -> ${socket.id}`);
+  });
+
+  // Handle 1-on-1 Private Messaging
   socket.on('send_message', (data) => {
-    io.emit('receive_message', data);
+    // data contains: { sender, recipient, text }
+    const recipientSocketId = onlineUsers[data.recipient];
+
+    // If recipient is online, send message to them
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit('receive_message', data);
+    }
+    
+    // Also send back to sender so it shows on their screen
+    socket.emit('receive_message', data);
   });
 
   socket.on('disconnect', () => {
+    for (let username in onlineUsers) {
+      if (onlineUsers[username] === socket.id) {
+        delete onlineUsers[username];
+        break;
+      }
+    }
     console.log('A user disconnected:', socket.id);
   });
 });
