@@ -76,16 +76,21 @@ io.on('connection', (socket) => {
 
   // Handle 1-on-1 Private Messaging
   socket.on('send_message', (data) => {
-    // data contains: { sender, recipient, text }
     const recipientSocketId = onlineUsers[data.recipient];
 
-    // If recipient is online, send message to them
     if (recipientSocketId) {
       io.to(recipientSocketId).emit('receive_message', data);
     }
     
-    // Also send back to sender so it shows on their screen
     socket.emit('receive_message', data);
+  });
+
+  // Handle Message Read Status (Blue Ticks)
+  socket.on('message_read', (data) => {
+    const senderSocketId = onlineUsers[data.sender];
+    if (senderSocketId) {
+      io.to(senderSocketId).emit('message_read_receipt', { messageId: data.messageId });
+    }
   });
 
   socket.on('disconnect', () => {
